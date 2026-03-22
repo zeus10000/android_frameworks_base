@@ -508,10 +508,12 @@ public final class DeviceStateProviderImpl implements DeviceStateProvider,
             inputManager.registerLidSwitchCallback(this);
         }
 
-        final SensorManager sensorManager = mContext.getSystemService(SensorManager.class);
-        for (int i = 0; i < sensorsToListenTo.size(); i++) {
-            Sensor sensor = sensorsToListenTo.valueAt(i);
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST);
+        if (!sensorsToListenTo.isEmpty()) {
+            final SensorManager sensorManager = mContext.getSystemService(SensorManager.class);
+            for (int i = 0; i < sensorsToListenTo.size(); i++) {
+                Sensor sensor = sensorsToListenTo.valueAt(i);
+                sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST);
+            }
         }
     }
 
