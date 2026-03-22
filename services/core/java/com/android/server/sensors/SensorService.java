@@ -33,8 +33,11 @@ import com.android.server.utils.TimingsTraceAndSlog;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import android.util.Slog;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class SensorService extends SystemService {
     private static final String START_NATIVE_SENSOR_SERVICE = "StartNativeSensorService";
@@ -87,11 +90,31 @@ public class SensorService extends SystemService {
         LocalServices.addService(SensorManagerInternal.class, new LocalService());
     }
 
+    private static final String TAG = "SensorService";
+    private static final long SENSOR_SERVICE_TIMEOUT_SECS = 10;
+
     @Override
     public void onBootPhase(int phase) {
         if (phase == SystemService.PHASE_WAIT_FOR_SENSOR_SERVICE) {
-            ConcurrentUtils.waitForFutureNoInterrupt(mSensorServiceStart,
-                    START_NATIVE_SENSOR_SERVICE);
+            Future<?> future;
+            synchronized (mLock) {
+                future = mSensorServiceStart;
+            }
+            if (future != null) {
+                try {
+                    // Use a timeout to avoid blocking system_server indefinitely when the
+                    // sensor HAL fails to start (e.g. missing vendor blobs on legacy devices).
+                    future.get(SENSOR_SERVICE_TIMEOUT_SECS, TimeUnit.SECONDS);
+                } catch (TimeoutException e) {
+                    Slog.w(TAG, "Timed out waiting for native sensor service after "
+                            + SENSOR_SERVICE_TIMEOUT_SECS + "s. Sensors may be unavailable.");
+                    future.cancel(true);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    Slog.w(TAG, "Failed to start native sensor service: " + e.getMessage());
+                }
+            }
             synchronized (mLock) {
                 mSensorServiceStart = null;
             }
